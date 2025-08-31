@@ -2253,7 +2253,7 @@ MonoBehaviour:
   rotationThreshold: 35
   rootMotionCooldown: 0.27
   spherePosition: {x: 0, y: 0, z: 0}
-  groundCheckDistance: 0.35
+  groundCheckDistance: 0.26
   groundLayer:
     serializedVersion: 2
     m_Bits: 243
