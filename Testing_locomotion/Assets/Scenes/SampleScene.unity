@@ -2930,10 +2930,9 @@ MonoBehaviour:
   deceleration: 13
   gravity: -9.81
   jumpHeight: 1.5
-  airVelocity: 4
+  airVelocity: 3.4
   rotationSpeed: 10
   rotationThreshold: 35
-  rootMotionCooldown: 0.1
   spherePosition: {x: 0, y: 0, z: 0}
   groundCheckDistance: 0.2
   groundLayer:

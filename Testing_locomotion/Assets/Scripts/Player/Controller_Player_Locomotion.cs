@@ -14,16 +14,10 @@ public class PlayerLocomotion : MonoBehaviour
     public float rotationSpeed = 3f;
     public float rotationThreshold = 35f;
 
-    [Header("Root Motion Cooldown")]
-    public float rootMotionCooldown = 0.3f;
-    private float rootMotionTimer;
-    private bool rootMotionCooldownActive;
-
-    [Header("Ground Check")]
+    [Header("Ground Check (CharacterController integrado)")]
     public Vector3 spherePosition;
     public float groundCheckDistance = 0.1f;
     public LayerMask groundLayer;
-    private Vector3 sphereOffset;
     public float jumpCooldown = 0.5f;
     private float nextJumpTime;
 
@@ -44,7 +38,6 @@ public class PlayerLocomotion : MonoBehaviour
 
     private bool isGrounded;
     private bool wasGrounded;
-    private bool rootMotionActive = true;
 
     void Start()
     {
@@ -65,13 +58,13 @@ public class PlayerLocomotion : MonoBehaviour
     void OnDrawGizmos()
     {
         Gizmos.color = Color.red;
-        Gizmos.DrawWireSphere(sphereOffset, groundCheckDistance);
+        Gizmos.DrawWireSphere(transform.position + spherePosition, groundCheckDistance);
     }
 
     void GroundCheck()
     {
-        sphereOffset = transform.position + spherePosition;
-        isGrounded = Physics.CheckSphere(sphereOffset + spherePosition, groundCheckDistance, groundLayer);
+        // Usamos directamente el sistema integrado del CharacterController
+        isGrounded = controller.isGrounded;
     }
 
     void InputHandler()
@@ -88,15 +81,12 @@ public class PlayerLocomotion : MonoBehaviour
         {
             velocity.y = Mathf.Sqrt(jumpHeight * -2f * gravity);
             anim.SetTrigger("Jump");
-            rootMotionActive = false;
-            rootMotionCooldownActive = false;
             nextJumpTime = Time.time + jumpCooldown;
 
             int lastJumpIndex = -1;
             if (Jumps.Count == 0) return;
 
             int newIndex;
-
             do
             {
                 newIndex = Random.Range(0, Jumps.Count);
@@ -123,14 +113,7 @@ public class PlayerLocomotion : MonoBehaviour
 
         if (isGrounded)
         {
-            if (!wasGrounded)
-            {
-                rootMotionCooldownActive = true;
-                rootMotionTimer = 0f;
-                rootMotionActive = false;
-            }
-
-            float effectiveSpeed = rootMotionCooldownActive ? airVelocity : moveSpeed;
+            float effectiveSpeed = moveSpeed;
             Vector3 targetVelocity = targetDirection * effectiveSpeed;
 
             if (targetDirection.magnitude > 0.1f)
@@ -144,7 +127,6 @@ public class PlayerLocomotion : MonoBehaviour
         {
             currentMoveVelocity = targetDirection * airVelocity;
             move = currentMoveVelocity + new Vector3(0, velocity.y, 0);
-            rootMotionActive = false;
         }
 
         controller.Move(move * Time.deltaTime);
@@ -192,18 +174,8 @@ public class PlayerLocomotion : MonoBehaviour
 
     void RootMotionHandler()
     {
-        if (rootMotionCooldownActive)
-        {
-            rootMotionTimer += Time.deltaTime;
-            if (rootMotionTimer >= rootMotionCooldown)
-            {
-                rootMotionCooldownActive = false;
-                rootMotionActive = true;
-            }
-        }
-
-        if (!isGrounded) rootMotionActive = false;
-        anim.applyRootMotion = rootMotionActive;
+        // Root motion siempre activado en tierra, desactivado en el aire
+        anim.applyRootMotion = isGrounded;
     }
 
     void AnimatorHandler()
@@ -224,22 +196,18 @@ public class PlayerLocomotion : MonoBehaviour
         }
     }
 
-
     public void PlayFootStep()
     {
         int lastStepIndex = -1;
         if (FootSteps.Count == 0) return;
 
         int newIndex;
-
-        // Evita repetir el mismo sonido consecutivamente
         do
         {
             newIndex = Random.Range(0, FootSteps.Count);
         } while (newIndex == lastStepIndex && FootSteps.Count > 1);
 
         lastStepIndex = newIndex;
-
         Audio.PlayOneShot(FootSteps[newIndex]);
     }
 }

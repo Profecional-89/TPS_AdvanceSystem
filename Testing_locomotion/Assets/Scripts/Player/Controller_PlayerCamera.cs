@@ -1,7 +1,7 @@
 using Unity.Mathematics;
 using UnityEngine;
 using UnityEngine.Rendering;
-using UnityEngine.WSA;
+using UnityEngine;
 
 public class Controller_PlayerCamera : MonoBehaviour
 {
