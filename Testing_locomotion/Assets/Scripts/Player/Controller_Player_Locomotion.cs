@@ -14,12 +14,24 @@ public class PlayerLocomotion : MonoBehaviour
     public float rotationSpeed = 3f;
     public float rotationThreshold = 35f;
 
-    [Header("Ground Check (CharacterController integrado)")]
-    public Vector3 spherePosition;
-    public float groundCheckDistance = 0.1f;
+    [Header("Ground Check Sphere (RED)")]
+    public Vector3 groundSphereOffset = new Vector3(0, -0.1f, 0f);
+    public float groundSphereRadius = 0.2f;
     public LayerMask groundLayer;
     public float jumpCooldown = 0.5f;
     private float nextJumpTime;
+
+    [Header("Root Motion Cooldown")]
+    public float rootMotionCooldown = 0.3f;
+    private float rootMotionTimer;
+    private bool rootMotionCooldownActive;
+    private bool rootMotionActive = true;
+
+    [Header("Step Offset Sphere (GREEN)")]
+    public Vector3 stepSphereOffset = new Vector3(0, 0.2f, 0.5f);
+    public float stepSphereRadius = 0.25f;
+    public LayerMask stepLayerMask; 
+    private float defaultStepOffset;
 
     [Header("References")]
     public Transform cameraTransform;
@@ -43,6 +55,7 @@ public class PlayerLocomotion : MonoBehaviour
     {
         controller = GetComponent<CharacterController>();
         anim = GetComponent<Animator>();
+        defaultStepOffset = controller.stepOffset; 
     }
 
     void Update()
@@ -53,18 +66,41 @@ public class PlayerLocomotion : MonoBehaviour
         MovementHandler();
         RootMotionHandler();
         AnimatorHandler();
+        StepOffsetHandler();
+    }
+
+    void StepOffsetHandler()
+    {
+        Vector3 worldPos = transform.position + transform.TransformDirection(stepSphereOffset);
+        bool hit = Physics.CheckSphere(worldPos, stepSphereRadius, stepLayerMask);
+
+        if (hit)
+            controller.stepOffset = defaultStepOffset;
+        else
+            controller.stepOffset = 0f;
     }
 
     void OnDrawGizmos()
     {
+        // 🔴 Ground sphere
         Gizmos.color = Color.red;
-        Gizmos.DrawWireSphere(transform.position + spherePosition, groundCheckDistance);
+        Gizmos.DrawWireSphere(transform.position + transform.TransformDirection(groundSphereOffset), groundSphereRadius);
+
+        // 🟢 Step offset sphere
+        Gizmos.color = Color.green;
+        Gizmos.DrawWireSphere(transform.position + transform.TransformDirection(stepSphereOffset), stepSphereRadius);
     }
 
     void GroundCheck()
     {
-        // Usamos directamente el sistema integrado del CharacterController
-        isGrounded = controller.isGrounded;
+        Vector3 worldPos = transform.position + transform.TransformDirection(groundSphereOffset);
+        isGrounded = Physics.CheckSphere(worldPos, groundSphereRadius, groundLayer);
+
+        if (isGrounded && velocity.y < 0)
+        {
+            // Suavizar aterrizaje (más natural, sin tirón brusco)
+            velocity.y = Mathf.Lerp(velocity.y, -0.5f, Time.deltaTime * 6f);
+        }
     }
 
     void InputHandler()
@@ -75,12 +111,12 @@ public class PlayerLocomotion : MonoBehaviour
 
     void JumpHandler()
     {
-        if (isGrounded && velocity.y < 0) velocity.y = -2f;
-
         if (isGrounded && Input.GetButtonDown("Jump") && Time.time >= nextJumpTime)
         {
             velocity.y = Mathf.Sqrt(jumpHeight * -2f * gravity);
             anim.SetTrigger("Jump");
+            rootMotionActive = false;
+            rootMotionCooldownActive = false;
             nextJumpTime = Time.time + jumpCooldown;
 
             int lastJumpIndex = -1;
@@ -107,13 +143,24 @@ public class PlayerLocomotion : MonoBehaviour
         right.Normalize();
 
         Vector3 targetDirection = (forward * playerInput.y + right * playerInput.x).normalized;
+
         velocity.y += gravity * Time.deltaTime;
 
         Vector3 move;
 
         if (isGrounded)
         {
-            float effectiveSpeed = moveSpeed;
+            if (!wasGrounded)
+            {
+                // Suavizar el aterrizaje en lugar de resetear con -2
+                velocity.y = Mathf.Min(velocity.y, -0.5f);
+
+                rootMotionCooldownActive = true;
+                rootMotionTimer = 0f;
+                rootMotionActive = false;
+            }
+
+            float effectiveSpeed = rootMotionCooldownActive ? airVelocity : moveSpeed;
             Vector3 targetVelocity = targetDirection * effectiveSpeed;
 
             if (targetDirection.magnitude > 0.1f)
@@ -127,6 +174,7 @@ public class PlayerLocomotion : MonoBehaviour
         {
             currentMoveVelocity = targetDirection * airVelocity;
             move = currentMoveVelocity + new Vector3(0, velocity.y, 0);
+            rootMotionActive = false;
         }
 
         controller.Move(move * Time.deltaTime);
@@ -174,8 +222,18 @@ public class PlayerLocomotion : MonoBehaviour
 
     void RootMotionHandler()
     {
-        // Root motion siempre activado en tierra, desactivado en el aire
-        anim.applyRootMotion = isGrounded;
+        if (rootMotionCooldownActive)
+        {
+            rootMotionTimer += Time.deltaTime;
+            if (rootMotionTimer >= rootMotionCooldown)
+            {
+                rootMotionCooldownActive = false;
+                rootMotionActive = true;
+            }
+        }
+
+        rootMotionActive = rootMotionActive && isGrounded;
+        anim.applyRootMotion = rootMotionActive;
     }
 
     void AnimatorHandler()

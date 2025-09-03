@@ -2933,12 +2933,18 @@ MonoBehaviour:
   airVelocity: 3.4
   rotationSpeed: 10
   rotationThreshold: 35
-  spherePosition: {x: 0, y: 0, z: 0}
-  groundCheckDistance: 0.2
+  groundSphereOffset: {x: 0, y: -0.01, z: 0}
+  groundSphereRadius: 0.2
   groundLayer:
     serializedVersion: 2
-    m_Bits: 243
-  jumpCooldown: 2.4
+    m_Bits: 499
+  jumpCooldown: 2.245
+  rootMotionCooldown: 0.13
+  stepSphereOffset: {x: 0, y: 0.2, z: 0.5}
+  stepSphereRadius: 0.25
+  stepLayerMask:
+    serializedVersion: 2
+    m_Bits: 256
   cameraTransform: {fileID: 760587593}
   FootSteps:
   - {fileID: 8300000, guid: 37fff1b42322f224fa2775f3be7ef51c, type: 3}
@@ -3336,7 +3342,7 @@ GameObject:
   - component: {fileID: 1871205464}
   - component: {fileID: 1871205463}
   - component: {fileID: 1871205462}
-  m_Layer: 0
+  m_Layer: 8
   m_Name: Stairs
   m_TagString: Untagged
   m_Icon: {fileID: 0}
