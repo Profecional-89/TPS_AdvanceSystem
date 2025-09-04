@@ -121,7 +121,7 @@ public class PlayerLocomotion : MonoBehaviour
             rootMotionActive = false;
             rootMotionCooldownActive = false;
             nextJumpTime = Time.time + jumpCooldown;
-
+    
             int lastJumpIndex = -1;
             if (Jumps.Count == 0) return;
 

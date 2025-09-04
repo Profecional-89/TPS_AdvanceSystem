@@ -2968,7 +2968,7 @@ MonoBehaviour:
   deceleration: 13
   gravity: -9.81
   jumpHeight: 1.5
-  airVelocity: 3.4
+  airVelocity: 4
   rotationSpeed: 10
   rotationThreshold: 35
   groundSphereOffset: {x: 0, y: 0.01, z: 0}
@@ -2976,7 +2976,7 @@ MonoBehaviour:
   groundLayer:
     serializedVersion: 2
     m_Bits: 499
-  jumpCooldown: 2.245
+  jumpCooldown: 2.3
   rootMotionCooldown: 0.13
   stepSphereOffset: {x: 0, y: 0.2, z: 0.5}
   stepSphereRadius: 0.25
