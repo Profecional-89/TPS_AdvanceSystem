@@ -40,6 +40,9 @@ public class PlayerLocomotion : MonoBehaviour
     public List<AudioClip> FootSteps;
     public List<AudioClip> Jumps;
 
+    [Header("Push Settings")]
+    public float pushForce = 5f; // 👈 Editable en el inspector
+
     private CharacterController controller;
     public AudioSource Audio;
     public AudioSource Audio2;
@@ -182,7 +185,12 @@ public class PlayerLocomotion : MonoBehaviour
         if (cameraTransform != null)
         {
             Vector3 camForwardFlat = new Vector3(cameraTransform.forward.x, 0f, cameraTransform.forward.z).normalized;
+            
+            // 👇 Ángulo entre personaje y cámara (horizontal)
             float angleFromCurrent = Vector3.SignedAngle(transform.forward, camForwardFlat, Vector3.up);
+
+            // 🔥 Mandamos el ángulo al Animator (x2)
+            anim.SetFloat("CameraAngle", angleFromCurrent * 1.9f);
 
             if (playerInput.sqrMagnitude > 0.01f || !isGrounded)
             {
@@ -249,8 +257,9 @@ public class PlayerLocomotion : MonoBehaviour
         Rigidbody rb = hit.collider.attachedRigidbody;
         if (rb != null && !rb.isKinematic)
         {
-            Vector3 pushDir = new Vector3(hit.moveDirection.x, 0, hit.moveDirection.z);
-            rb.AddForce(pushDir * moveSpeed, ForceMode.Impulse);
+            // 🔥 Empuje independiente de la cámara
+            Vector3 pushDir = new Vector3(hit.moveDirection.x, 0, hit.moveDirection.z).normalized;
+            rb.AddForce(pushDir * pushForce, ForceMode.Impulse);
         }
     }
 
