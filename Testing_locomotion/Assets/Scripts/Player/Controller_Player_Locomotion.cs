@@ -1,9 +1,13 @@
 using System.Collections.Generic;
 using UnityEngine;
+using System.Collections;
 
 [RequireComponent(typeof(CharacterController))]
 public class PlayerLocomotion : MonoBehaviour
 {
+    [Header("General Control")]
+    public bool HasControl = true; // 👈 Si está en false, el jugador queda totalmente congelado
+
     [Header("Movement")]
     public float moveSpeed = 6f;
     public float acceleration = 10f;
@@ -11,6 +15,8 @@ public class PlayerLocomotion : MonoBehaviour
     public float gravity = -9.81f;
     public float jumpHeight = 1.5f;
     public float airVelocity = 3f;
+    public float airAcceleration = 6f;
+    public float airDeceleration = 8f;
     public float rotationSpeed = 3f;
     public float rotationThreshold = 35f;
 
@@ -41,12 +47,14 @@ public class PlayerLocomotion : MonoBehaviour
     public List<AudioClip> Jumps;
 
     [Header("Push Settings")]
-    public float pushForce = 5f; // 👈 Editable en el inspector
+    public float pushForce = 5f;
 
-    private CharacterController controller;
+    public CharacterController controller;
+    public Animator anim;
+    private ParkourController parkourController;
     public AudioSource Audio;
     public AudioSource Audio2;
-    private Animator anim;
+
     private Vector3 velocity;
     private Vector3 currentMoveVelocity;
     private Vector3 playerInput;
@@ -57,6 +65,7 @@ public class PlayerLocomotion : MonoBehaviour
     void Start()
     {
         controller = GetComponent<CharacterController>();
+        parkourController = GetComponent<ParkourController>();
         anim = GetComponent<Animator>();
         defaultStepOffset = controller.stepOffset; 
     }
@@ -64,9 +73,19 @@ public class PlayerLocomotion : MonoBehaviour
     void Update()
     {
         GroundCheck();
-        InputHandler();
-        JumpHandler();
-        MovementHandler();
+
+        if (HasControl)
+        {
+            InputHandler();
+            JumpHandler();
+            MovementHandler();
+        }
+        else
+        {
+            playerInput = Vector3.zero;
+            currentMoveVelocity = Vector3.zero;
+        }
+
         RootMotionHandler();
         AnimatorHandler();
         StepOffsetHandler();
@@ -76,20 +95,14 @@ public class PlayerLocomotion : MonoBehaviour
     {
         Vector3 worldPos = transform.position + transform.TransformDirection(stepSphereOffset);
         bool hit = Physics.CheckSphere(worldPos, stepSphereRadius, stepLayerMask);
-
-        if (hit)
-            controller.stepOffset = defaultStepOffset;
-        else
-            controller.stepOffset = 0f;
+        controller.stepOffset = hit ? defaultStepOffset : 0f;
     }
 
     void OnDrawGizmos()
     {
-        // 🔴 Ground sphere
         Gizmos.color = Color.red;
         Gizmos.DrawWireSphere(transform.position + transform.TransformDirection(groundSphereOffset), groundSphereRadius);
 
-        // 🟢 Step offset sphere
         Gizmos.color = Color.green;
         Gizmos.DrawWireSphere(transform.position + transform.TransformDirection(stepSphereOffset), stepSphereRadius);
     }
@@ -101,7 +114,6 @@ public class PlayerLocomotion : MonoBehaviour
 
         if (isGrounded && velocity.y < 0)
         {
-            // Suavizar aterrizaje (más natural, sin tirón brusco)
             velocity.y = Mathf.Lerp(velocity.y, -0.5f, Time.deltaTime * 6f);
         }
     }
@@ -116,23 +128,35 @@ public class PlayerLocomotion : MonoBehaviour
     {
         if (isGrounded && Input.GetButtonDown("Jump") && Time.time >= nextJumpTime)
         {
+            StartCoroutine(DelayedJumpCheck());
+        }
+    }
+
+    IEnumerator DelayedJumpCheck()
+    {
+        // Espera unos milisegundos (10 ms = 0.01f)
+        yield return new WaitForSeconds(0.01f);
+
+        if (!parkourController.inAction) // ✅ Verifica de nuevo antes de saltar
+        {
             velocity.y = Mathf.Sqrt(jumpHeight * -2f * gravity);
             anim.SetTrigger("Jump");
             rootMotionActive = false;
             rootMotionCooldownActive = false;
             nextJumpTime = Time.time + jumpCooldown;
-    
+
             int lastJumpIndex = -1;
-            if (Jumps.Count == 0) return;
-
-            int newIndex;
-            do
+            if (Jumps.Count > 0)
             {
-                newIndex = Random.Range(0, Jumps.Count);
-            } while (newIndex == lastJumpIndex && Jumps.Count > 1);
+                int newIndex;
+                do
+                {
+                    newIndex = Random.Range(0, Jumps.Count);
+                } while (newIndex == lastJumpIndex && Jumps.Count > 1);
 
-            lastJumpIndex = newIndex;
-            Audio2.PlayOneShot(Jumps[newIndex]);
+                lastJumpIndex = newIndex;
+                Audio2.PlayOneShot(Jumps[newIndex]);
+            }
         }
     }
 
@@ -148,16 +172,13 @@ public class PlayerLocomotion : MonoBehaviour
         Vector3 targetDirection = (forward * playerInput.y + right * playerInput.x).normalized;
 
         velocity.y += gravity * Time.deltaTime;
-
         Vector3 move;
 
         if (isGrounded)
         {
             if (!wasGrounded)
             {
-                // Suavizar el aterrizaje en lugar de resetear con -2
                 velocity.y = Mathf.Min(velocity.y, -0.5f);
-
                 rootMotionCooldownActive = true;
                 rootMotionTimer = 0f;
                 rootMotionActive = false;
@@ -175,7 +196,13 @@ public class PlayerLocomotion : MonoBehaviour
         }
         else
         {
-            currentMoveVelocity = targetDirection * airVelocity;
+            Vector3 targetVelocity = targetDirection * airVelocity;
+
+            if (targetDirection.magnitude > 0.1f)
+                currentMoveVelocity = Vector3.Lerp(currentMoveVelocity, targetVelocity, airAcceleration * Time.deltaTime);
+            else
+                currentMoveVelocity = Vector3.Lerp(currentMoveVelocity, Vector3.zero, airDeceleration * Time.deltaTime);
+
             move = currentMoveVelocity + new Vector3(0, velocity.y, 0);
             rootMotionActive = false;
         }
@@ -185,11 +212,8 @@ public class PlayerLocomotion : MonoBehaviour
         if (cameraTransform != null)
         {
             Vector3 camForwardFlat = new Vector3(cameraTransform.forward.x, 0f, cameraTransform.forward.z).normalized;
-            
-            // 👇 Ángulo entre personaje y cámara (horizontal)
             float angleFromCurrent = Vector3.SignedAngle(transform.forward, camForwardFlat, Vector3.up);
 
-            // 🔥 Mandamos el ángulo al Animator (x2)
             anim.SetFloat("CameraAngle", angleFromCurrent * 1.9f);
 
             if (playerInput.sqrMagnitude > 0.01f || !isGrounded)
@@ -230,6 +254,13 @@ public class PlayerLocomotion : MonoBehaviour
 
     void RootMotionHandler()
     {
+        if (parkourController != null && parkourController.inAction)
+        {
+            rootMotionActive = true;
+            anim.applyRootMotion = true;
+            return;
+        }
+
         if (rootMotionCooldownActive)
         {
             rootMotionTimer += Time.deltaTime;
@@ -257,7 +288,6 @@ public class PlayerLocomotion : MonoBehaviour
         Rigidbody rb = hit.collider.attachedRigidbody;
         if (rb != null && !rb.isKinematic)
         {
-            // 🔥 Empuje independiente de la cámara
             Vector3 pushDir = new Vector3(hit.moveDirection.x, 0, hit.moveDirection.z).normalized;
             rb.AddForce(pushDir * pushForce, ForceMode.Impulse);
         }
